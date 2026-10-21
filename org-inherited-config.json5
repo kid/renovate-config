@@ -1,0 +1,61 @@
+// Inherited by every repo the runner (.github/workflows/renovate.yaml) covers,
+// ahead of the repo's own config: repos only add what is specific to them.
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: [
+    "config:recommended",
+    "docker:enableMajor",
+    "helpers:pinGitHubActionDigests",
+    "github>kid/renovate-config//.renovate/changelogs.json5",
+    "github>kid/renovate-config//.renovate/groups.json5",
+    "github>kid/renovate-config//.renovate/labels.json5",
+    "github>kid/renovate-config//.renovate/overrides.json5",
+    "github>kid/renovate-config//.renovate/semanticCommits.json5",
+    ":automergeBranch",
+    ":disableRateLimiting",
+    ":dependencyDashboard",
+    ":semanticCommits",
+    ":timezone(Europe/Brussels)",
+  ],
+  suppressNotifications: [
+    "prEditedNotification",
+    "prIgnoreNotification",
+  ],
+  // Adopt the PRs the hosted Renovate GitHub App opened before a repo moved
+  // to this self-hosted runner: without this the runner reads the App's
+  // commits as manual edits and never updates them. Its other half,
+  // ignorePrAuthor, is global-only (RENOVATE_IGNORE_PR_AUTHOR in the
+  // workflow). Keep both while any of those PRs is still open.
+  gitIgnoredAuthors: ["29139614+renovate[bot]@users.noreply.github.com"],
+  customManagers: [
+    {
+      customType: "regex",
+      managerFilePatterns: ["/.*\\.nix$/"],
+      matchStrings: [
+        "# renovate: datasource=(?<datasource>[a-z.-]+?)(?: depName=(?<depName>\\S+?))?(?: versioning=(?<versioning>\\S+?))?\\s+\\S+\\s*=\\s*\"(?<currentValue>[^\"]+)\";",
+      ],
+    },
+  ],
+  nix: {
+    enabled: true,
+  },
+  lockFileMaintenance: {
+    enabled: true,
+    schedule: ["before 4am on monday"],
+  },
+  packageRules: [
+    {
+      // Every `# renovate:` pin in Nix has a content hash next to its
+      // version, which Renovate cannot recompute. refresh-nix-hash is on the
+      // runner's PATH (see the workflow).
+      matchManagers: ["custom.regex"],
+      matchFileNames: ["**/*.nix"],
+      matchDatasources: ["github-releases", "/^custom\\./"],
+      postUpgradeTasks: {
+        commands: ["refresh-nix-hash {{{packageFile}}} {{{depName}}} {{{newValue}}}"],
+        fileFilters: ["**/*.nix"],
+        executionMode: "update",
+      },
+    },
+  ],
+}

@@ -1,0 +1,78 @@
+---
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+name: Renovate
+
+# Self-hosted, replacing the Renovate GitHub App for every repo listed in
+# RENOVATE_REPOSITORIES: only a self-hosted run can execute postUpgradeTasks,
+# which recompute the Nix hash next to each bumped pin
+# (org-inherited-config.json5) — something the hosted App has no way to do.
+on:
+  schedule:
+    - cron: "0 */3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  renovate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
+
+      - name: Cache Nix store
+        uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-
+          gc-max-store-size-linux: 5G
+          purge: true
+          purge-prefixes: nix-${{ runner.os }}-
+          purge-created: 0
+          purge-last-accessed: P7D
+          purge-primary-key: never
+
+      # postUpgradeTasks run in each repo's clone, so the shared tools come
+      # from this checkout through PATH rather than from the repo itself.
+      - name: Install postUpgradeTasks tools
+        run: |
+          nix build .#refresh-nix-hash --out-link "$RUNNER_TEMP/tools"
+          echo "$RUNNER_TEMP/tools/bin" >> "$GITHUB_PATH"
+
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      # A GitHub App token, not a PAT: Renovate then commits through the API
+      # and GitHub signs the commits, and PRs it opens still trigger workflows.
+      # Scoped to the owner's installation; the App must be installed on every
+      # repo below.
+      - name: Create GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ secrets.RENOVATE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RENOVATE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: renovate-config,home-ops,nixfiles,nixfiles-work,neovim
+
+      - name: Run Renovate
+        # renovate: datasource=npm depName=renovate
+        run: npx --yes renovate@44.97.2
+        env:
+          RENOVATE_TOKEN: ${{ steps.app-token.outputs.token }}
+          RENOVATE_PLATFORM: github
+          RENOVATE_REPOSITORIES: '["kid/renovate-config", "kid/home-ops", "kid/nixfiles", "kid/nixfiles-work", "kid/neovim"]'
+          RENOVATE_INHERIT_CONFIG: "true"
+          RENOVATE_INHERIT_CONFIG_FILE_NAME: org-inherited-config.json5
+          RENOVATE_IGNORE_PR_AUTHOR: "true"
+          RENOVATE_ALLOWED_COMMANDS: '["^refresh-nix-hash [\\w./-]+ [\\w./-]+ [\\w.-]+$", "^nix run \\.#rehash-chart -- [\\w./-]+$", "^nix run \\.#write-manifests -- --skip-secrets$", "^nix run \\.#write-flake$", "^nix flake lock$"]'
