@@ -50,7 +50,7 @@
       // runner's PATH (see the workflow).
       matchManagers: ["custom.regex"],
       matchFileNames: ["**/*.nix"],
-      matchDatasources: ["github-releases", "/^custom\\./"],
+      matchDatasources: ["github-releases", "github-tags", "/^custom\\./"],
       postUpgradeTasks: {
         commands: ["refresh-nix-hash {{{packageFile}}} {{{depName}}} {{{newValue}}}"],
         fileFilters: ["**/*.nix"],
