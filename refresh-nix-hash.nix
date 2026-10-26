@@ -7,9 +7,9 @@
 #
 #   refresh-nix-hash <file> <dep-name> <new-value>
 #
-# pkgs/by-name/<name>/package.nix is handed to nix-update, which evaluates the
-# flake's packages.<system>.<name> and refreshes every hash it knows (src,
-# vendorHash, cargoHash, npmDepsHash...); the package must expose `src`.
+# pkgs/by-name/<name>/package.nix is handed to nix-update, which runs the
+# package's updateScript when present (e.g. for multi-platform hashes), or
+# refreshes the hashes it knows (src, vendorHash, cargoHash, npmDepsHash...).
 # Anything else is a bare fetchFromGitHub pin: dep-name is "owner/repo" and
 # new-value the literal `rev`.
 {
@@ -37,7 +37,9 @@ writeShellApplication {
       pkgs/by-name/*/package.nix)
         attr=''${file#pkgs/by-name/}
         attr=''${attr%/package.nix}
-        nix-update --flake --version=skip --override-filename "$file" "$attr"
+        # nix-update's updateScript runner imports <nixpkgs>, even for flakes.
+        NIX_PATH="nixpkgs=${path}''${NIX_PATH:+:$NIX_PATH}" \
+          nix-update --flake --use-update-script --version=skip --override-filename "$file" "$attr"
         exit 0
         ;;
     esac
