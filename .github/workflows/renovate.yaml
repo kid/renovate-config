@@ -10,6 +10,24 @@ on:
   schedule:
     - cron: "0 */3 * * *"
   workflow_dispatch:
+    inputs:
+      repository:
+        description: Repository to process
+        type: choice
+        default: all
+        # Keep in sync with the default RENOVATE_REPOSITORIES list below.
+        options:
+          - all
+          - renovate-config
+          - home-ops
+          - nixfiles
+          - nixfiles-work
+          - neovim
+  # Sent by kid/neovim and kid/nixfiles CI on main with
+  # {"event_type": "renovate", "client_payload": {"repository": "<repo>"}}
+  # so the downstream flake-input PR opens without waiting for the schedule.
+  repository_dispatch:
+    types: [renovate]
 
 concurrency:
   group: ${{ github.workflow }}
@@ -74,7 +92,7 @@ jobs:
         env:
           RENOVATE_TOKEN: ${{ steps.app-token.outputs.token }}
           RENOVATE_PLATFORM: github
-          RENOVATE_REPOSITORIES: '["kid/renovate-config", "kid/home-ops", "kid/nixfiles", "kid/nixfiles-work", "kid/neovim"]'
+          RENOVATE_REPOSITORIES: ${{ (inputs.repository != 'all' && inputs.repository && format('{0}/{1}', github.repository_owner, inputs.repository)) || (github.event.client_payload.repository && format('{0}/{1}', github.repository_owner, github.event.client_payload.repository)) || '["kid/renovate-config", "kid/home-ops", "kid/nixfiles", "kid/nixfiles-work", "kid/neovim"]' }}
           RENOVATE_INHERIT_CONFIG: "true"
           RENOVATE_INHERIT_CONFIG_FILE_NAME: org-inherited-config.json5
           RENOVATE_IGNORE_PR_AUTHOR: "true"
