@@ -31,8 +31,11 @@
     {
       customType: "regex",
       managerFilePatterns: ["/.*\\.nix$/"],
+      // A docker tag pinned by digest (`tag@sha256:…`) splits into
+      // currentValue and currentDigest: docker versioning rejects the
+      // combined string, which silently skips the dependency.
       matchStrings: [
-        "# renovate: datasource=(?<datasource>[a-z.-]+?)(?: depName=(?<depName>\\S+?))?(?: versioning=(?<versioning>\\S+?))?\\s+\\S+\\s*=\\s*\"(?<currentValue>[^\"]+)\";",
+        "# renovate: datasource=(?<datasource>[a-z.-]+?)(?: depName=(?<depName>\\S+?))?(?: versioning=(?<versioning>\\S+?))?\\s+\\S+\\s*=\\s*\"(?<currentValue>[^\"@]+)(?:@(?<currentDigest>sha256:[0-9a-f]+))?\";",
       ],
     },
   ],
